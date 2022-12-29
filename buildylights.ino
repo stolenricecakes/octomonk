@@ -7,6 +7,7 @@ const char* json = "{\"command\":\"start\",\"seconds\":10,\"hue\":255}";
 //this is for octomonk
 #define NUM_LEDS 17
 
+#define BEEP_PIN 8
 #define DATA_PIN 5
 #define FORMAT GRB
 #define DURATION 10
@@ -35,7 +36,9 @@ void setup() {
 }
 
 byte on = 1;
+byte beepage = 0;
 unsigned long stopAfter = 5000; // allow for a 5 second start
+unsigned long startTime = 0;
 typedef void (*SimplePatternList[])();
 SimplePatternList buildPatterns = { pulse, chaserman, backNForth, pulse, chaserman, backNForth, strobe, gradient, glitterRainbow, confetti, juggle, bpm, rainbowBackNForth, Fire2012 };
 uint8_t patternIdx = 0;
@@ -43,7 +46,11 @@ unsigned long seconds = DURATION;
 uint8_t gHue = 0;
 int buttonState = 0;
 int lastState = 0;
-
+int placeInPhase = 0;
+int step = 0;
+int lastStep = 0;
+int boundaries[] = {300,550,755,920,1050,1150,1225,1280,1320,1350,1375,1400,1430,1470,1525,1600,1700,1830,1995,2200,2450,2750,3000};
+//22 of these
 void loop() {
   buttonState = digitalRead(9);
 
@@ -51,12 +58,12 @@ void loop() {
   // if the button is on (and was off before) then turn on
   // if the button is still on, dont change anything.
 
-  if (buttonState == LOW) {
+ // if (buttonState == LOW) {
     loop_octomonk();
-  }
-  else {
-    loop_nightlight();
-  }
+ // }
+ // else {
+ //   loop_nightlight();
+ // }
   lastState = buttonState;
 }
 
@@ -73,6 +80,45 @@ void loop_octomonk() {
           FastLED.show();
           FastLED.delay(10);
        }
+    }
+  }
+  else if (beepage) {
+    // problems:   beepage should listen to beep off's.  maybe check if we have legit input, then do something???
+    if (millis() > stopAfter) {
+      noBeepage();
+    }
+    else {
+    // determine phase
+      placeInPhase = (millis() - startTime) % 6000;
+      int step =-1;
+      int duration = 0;
+      for (byte i = 0; i < 22; i++) {
+        if (placeInPhase < boundaries[i] ) {
+          step = i;
+          duration = boundaries[i+1] - boundaries[i];
+          break;
+        }
+      }
+      if (step > -1 && step != lastStep) {
+        noTone(BEEP_PIN);
+        int freq = random16(2500) + 300;
+        tone(BEEP_PIN, freq, duration);
+        lastStep = step;
+      }
+      else if (step == -1) {
+        lastStep = -1;
+        noTone(BEEP_PIN);
+
+        // try to read here... 
+        DynamicJsonDocument doc(capacity);
+        DeserializationError err = deserializeJson(doc, Serial);
+        if (!err) {
+          const char* command = doc["command"]; // "start"
+          if (strcmp("beep-off",command) == 0) {
+            noBeepage();
+          }   
+        }
+      }
     }
   }
   else {
@@ -117,6 +163,12 @@ void loop_octomonk() {
         else if (strcmp("fire",command) == 0) {
           patternIdx = FIRE_IDX;
           turnOn();
+        }
+        else if (strcmp("beep-on",command) == 0) {
+           beepinate();
+        }
+        else if (strcmp("beep-off",command) == 0) {
+           noBeepage();
         }
         else {
            printUsage();
@@ -166,6 +218,17 @@ void printUsage() {
    Serial.println("       or... ");
    Serial.println("   {\"command\":\"fire\"} ");
    Serial.println(" seconds are optional (defaults to 10), hue ignored on failed commands");
+}
+
+void beepinate() {
+  beepage = 1;
+  startTime = millis();
+  stopAfter = startTime + 60000;
+}
+
+void noBeepage() {
+  beepage = 0;
+  noTone(BEEP_PIN);
 }
 
 void turnOn() {
