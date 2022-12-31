@@ -7,8 +7,9 @@ const char* json = "{\"command\":\"start\",\"seconds\":10,\"hue\":255}";
 //this is for octomonk
 #define NUM_LEDS 17
 
-#define BEEP_PIN 8
+#define BEEP_PIN 3
 #define DATA_PIN 5
+#define SWITCH_PIN 9
 #define FORMAT GRB
 #define DURATION 10
 
@@ -30,7 +31,7 @@ void setup() {
   FastLED.clear(true);
   FastLED.show();
   
-  pinMode(9, INPUT_PULLUP);
+  pinMode(SWITCH_PIN, INPUT_PULLUP);
   Serial.begin(9600);
   while (!Serial) continue;
 }
@@ -52,24 +53,25 @@ int lastStep = 0;
 int boundaries[] = {300,550,755,920,1050,1150,1225,1280,1320,1350,1375,1400,1430,1470,1525,1600,1700,1830,1995,2200,2450,2750,3000};
 //22 of these
 void loop() {
-  buttonState = digitalRead(9);
+  buttonState = digitalRead(SWITCH_PIN);
 
   //two states... if button is off, then turn it off
   // if the button is on (and was off before) then turn on
   // if the button is still on, dont change anything.
 
- // if (buttonState == LOW) {
+  if (buttonState == LOW) {
     loop_octomonk();
- // }
- // else {
- //   loop_nightlight();
- // }
+  }
+  else {
+    loop_nightlight();
+  }
   lastState = buttonState;
 }
 
 // original loop... 
 void loop_octomonk() {
   if (on) {
+    noBeepage();
     if (millis() > stopAfter) {
        turnOff();
     }
@@ -122,6 +124,7 @@ void loop_octomonk() {
     }
   }
   else {
+    noBeepage();
     DynamicJsonDocument doc(capacity);
     DeserializationError err = deserializeJson(doc, Serial);
     if (err) {
